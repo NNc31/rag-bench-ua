@@ -1,0 +1,15 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: ragexp-db
+    environment:
+      POSTGRES_DB: ragexp
+      POSTGRES_USER: ragexp
+      POSTGRES_PASSWORD: ragexp
+    ports:
+      - "5433:5432"
+    volumes:
+      - ragexp-pgdata:/var/lib/postgresql/data
+
+volumes:
+  ragexp-pgdata:
