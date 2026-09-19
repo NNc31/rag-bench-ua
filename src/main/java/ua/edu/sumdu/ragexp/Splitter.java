@@ -25,12 +25,12 @@ public final class Splitter {
         StringBuilder buf = new StringBuilder();
         int ix = 0;
         for (String u : units) {
-            if (buf.length() > 0 && buf.length() + u.length() + 1 > maxChars) {
+            if (!buf.isEmpty() && buf.length() + u.length() + 1 > maxChars) {
                 String chunkText = buf.toString().strip();
                 if (!chunkText.isEmpty()) chunks.add(new Chunk(docId, ix++, chunkText));
                 buf = new StringBuilder(tail(chunkText, overlapChars));
             }
-            if (buf.length() > 0) buf.append('\n');
+            if (!buf.isEmpty()) buf.append('\n');
             buf.append(u);
         }
         String rest = buf.toString().strip();
@@ -43,7 +43,7 @@ public final class Splitter {
         StringBuilder buf = new StringBuilder();
         for (String sentence : para.split("(?<=[.!?…])\\s+")) {
             if (sentence.length() > maxChars) {
-                if (buf.length() > 0) {
+                if (!buf.isEmpty()) {
                     out.add(buf.toString());
                     buf = new StringBuilder();
                 }
@@ -52,18 +52,17 @@ public final class Splitter {
                 }
                 continue;
             }
-            if (buf.length() + sentence.length() + 1 > maxChars && buf.length() > 0) {
+            if (buf.length() + sentence.length() + 1 > maxChars && !buf.isEmpty()) {
                 out.add(buf.toString());
                 buf = new StringBuilder();
             }
-            if (buf.length() > 0) buf.append(' ');
+            if (!buf.isEmpty()) buf.append(' ');
             buf.append(sentence);
         }
-        if (buf.length() > 0) out.add(buf.toString());
+        if (!buf.isEmpty()) out.add(buf.toString());
         return out;
     }
 
-    /** Хвіст тексту довжиною ~n символів, вирівняний по межі слова. */
     private static String tail(String s, int n) {
         if (n <= 0) return "";
         if (s.length() <= n) return s;
