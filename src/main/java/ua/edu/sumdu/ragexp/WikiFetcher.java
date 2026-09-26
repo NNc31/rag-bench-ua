@@ -40,16 +40,19 @@ public final class WikiFetcher {
                 ok++;
                 continue;
             }
-            String extract = fetchExtract(title);
-            if (extract == null || extract.length() < MIN_CHARS) {
-                System.out.println("  ! Пропущено «" + title + "» (сторінки немає або текст закороткий)");
+            FetchResult res = fetchExtract(title);
+            if (res.text() == null) {
+                System.out.println("  ! Пропущено «" + title + "» (" + res.reason() + ")");
+                skipped++;
+            } else if (res.text().length() < MIN_CHARS) {
+                System.out.println("  ! Пропущено «" + title + "» (закороткий текст: " + res.text().length() + " симв.)");
                 skipped++;
             } else {
-                Files.writeString(out, extract, StandardCharsets.UTF_8);
-                System.out.println("  + «" + title + "»: " + extract.length() + " симв.");
+                Files.writeString(out, res.text(), StandardCharsets.UTF_8);
+                System.out.println("  + «" + title + "»: " + res.text().length() + " симв.");
                 ok++;
             }
-            Thread.sleep(300);
+            Thread.sleep(1000);
         }
         System.out.println("Корпус готовий: " + ok + " документів, пропущено " + skipped + ". Каталог: " + cfg.corpusDir());
         if (ok < 15) {
@@ -57,21 +60,38 @@ public final class WikiFetcher {
         }
     }
 
-    private String fetchExtract(String title) throws IOException, InterruptedException {
+    private record FetchResult(String text, String reason) {}
+
+    private FetchResult fetchExtract(String title) throws InterruptedException {
         String url = API + "?action=query&format=json&formatversion=2&prop=extracts&explaintext=1&redirects=1&titles="
                 + URLEncoder.encode(title, StandardCharsets.UTF_8);
         HttpRequest req = HttpRequest.newBuilder(URI.create(url))
                 .timeout(Duration.ofSeconds(30))
                 .header("User-Agent", "RagUkrExperiment/0.1 (academic research)")
                 .GET().build();
-        HttpResponse<String> r = http.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-        if (r.statusCode() != 200) return null;
-        JsonNode pages = Util.JSON.readTree(r.body()).path("query").path("pages");
-        if (!pages.isArray() || pages.isEmpty()) return null;
-        JsonNode page = pages.get(0);
-        if (page.has("missing")) return null;
-        String extract = page.path("extract").asText("");
-        return extract.isBlank() ? null : extract;
+        for (int attempt = 1; attempt <= 3; attempt++) {
+            try {
+                HttpResponse<String> r = http.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+                int code = r.statusCode();
+                if (code == 429 || code >= 500) {
+                    System.out.println("  ... HTTP " + code + " для «" + title + "», повтор через " + (5 * attempt) + " с (спроба " + attempt + "/3)");
+                    Thread.sleep(5000L * attempt);
+                    continue;
+                }
+                if (code != 200) return new FetchResult(null, "HTTP " + code);
+                JsonNode pages = Util.JSON.readTree(r.body()).path("query").path("pages");
+                if (!pages.isArray() || pages.isEmpty()) return new FetchResult(null, "неочікувана відповідь API");
+                JsonNode page = pages.get(0);
+                if (page.has("missing")) return new FetchResult(null, "сторінки не існує");
+                String extract = page.path("extract").asText("");
+                if (extract.isBlank()) return new FetchResult(null, "порожній витяг");
+                return new FetchResult(extract, null);
+            } catch (IOException e) {
+                System.out.println("  ... помилка з'єднання для «" + title + "» (спроба " + attempt + "/3): " + e.getMessage());
+                Thread.sleep(5000L * attempt);
+            }
+        }
+        return new FetchResult(null, "не вдалося отримати після 3 спроб");
     }
 
     static String safeFileName(String title) {
