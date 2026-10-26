@@ -15,17 +15,27 @@ public final class Main {
 
         List<String> a = Arrays.asList(args);
         boolean quick = a.contains("--quick");
-        String cmd = a.stream().filter(s -> !s.startsWith("--")).findFirst().orElse("help");
+        int more = 0;
+        int mi = a.indexOf("--more");
+        if (mi >= 0 && mi + 1 < a.size()) more = Integer.parseInt(a.get(mi + 1));
+        String cmd = "help";
+        for (int i = 0; i < a.size(); i++) {
+            if (mi >= 0 && i == mi + 1) continue;
+            if (!a.get(i).startsWith("--")) {
+                cmd = a.get(i);
+                break;
+            }
+        }
 
         Config cfg = Config.load();
         OllamaClient ollama = new OllamaClient(cfg.ollamaUrl());
 
         switch (cmd) {
             case "fetch" -> new WikiFetcher(cfg).run();
-            case "qa" -> new QaGenerator(cfg, ollama).run();
+            case "qa" -> new QaGenerator(cfg, ollama).run(more);
             case "prepare" -> {
                 new WikiFetcher(cfg).run();
-                new QaGenerator(cfg, ollama).run();
+                new QaGenerator(cfg, ollama).run(0);
             }
             case "run" -> new ExperimentRunner(cfg, ollama, quick).run();
             case "judge" -> new Judge(cfg, ollama).run();
